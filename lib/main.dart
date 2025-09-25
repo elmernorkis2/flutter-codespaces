@@ -17,6 +17,10 @@ import 'package:local_auth/local_auth.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:intl/intl.dart';
 
+// App screens
+import 'top_up_screen.dart';
+import 'live_streamers_screen.dart';
+
 class SignUpScreen extends StatelessWidget {
   final TextEditingController phoneController = TextEditingController();
 
@@ -453,6 +457,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
     transactions = widget.initialTransactions;
     _loadStoredTransactions(); // 🔄 Load latest transactions
   }
+  int _selectedIndex = 0;
+
 
   void _handleTransaction(double newBalance, Map<String, String> transaction) {
     setState(() {
@@ -461,6 +467,21 @@ class _DashboardScreenState extends State<DashboardScreen> {
     });
     _updateStorage(); // ✅ Call it here to persist changes
   }
+  List<Widget> get _screens => [
+  SendMoneyScreen(
+    currentBalance: balance,
+    onTransactionComplete: _handleTransaction,
+  ),
+  PayBillsScreen(
+    currentBalance: balance,
+    onTransactionComplete: _handleTransaction,
+  ),
+  TopUpScreen(
+    currentBalance: balance,
+    onTransactionComplete: _handleTransaction,
+  ),
+  LiveStreamersScreen(),
+];
 
   Future<void> _updateStorage() async {
     final prefs = await SharedPreferences.getInstance();
@@ -534,7 +555,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (context) => AddBalanceScreen(
+                              builder: (context) => TopUpScreen(
                                 currentBalance: balance,
                                 onTransactionComplete: _handleTransaction,
                               ),
@@ -542,7 +563,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           );
                         }),
                         _buildNavButton('Live', Icons.live_tv, () {
-                          // Optional: scroll to live section
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => LiveStreamersScreen(),
+                            ),
+                          );
                         }),
                       ],
                     ),

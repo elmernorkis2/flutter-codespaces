@@ -1,22 +1,23 @@
 import 'package:flutter/material.dart';
-import 'live_room_screen.dart'; // Make sure this import matches your file structure
-import 'live_user.dart'; // Your LiveUser model
+import 'live_room_screen.dart';
+import 'live_user.dart';
 
 class LiveStreamersScreen extends StatelessWidget {
-  final List<LiveUser> streamers = [
-    LiveUser(
-      name: 'StreamerOne',
-      thumbnailUrl: 'https://via.placeholder.com/150',
-      viewers: 12,
-    ),
-    LiveUser(
-      name: 'StreamerTwo',
-      thumbnailUrl: 'https://via.placeholder.com/150',
-      viewers: 45,
-    ),
-  ];
+  final List<LiveUser> streamers;
 
-  const LiveStreamersScreen({super.key});
+  LiveStreamersScreen({super.key})
+      : streamers = [
+          LiveUser(
+            name: 'StreamerOne',
+            thumbnailUrl: 'https://via.placeholder.com/150',
+            viewers: 12,
+          ),
+          LiveUser(
+            name: 'StreamerTwo',
+            thumbnailUrl: 'https://via.placeholder.com/150',
+            viewers: 45,
+          ),
+        ];
 
   @override
   Widget build(BuildContext context) {
