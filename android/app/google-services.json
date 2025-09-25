@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "387386573650",
+    "project_id": "phcash-a8f69",
+    "storage_bucket": "phcash-a8f69.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:387386573650:android:8c37d501e805fad754308b",
+        "android_client_info": {
+          "package_name": "com.example.flutter_app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCYvkErdpa5X1gBExlUgafMTWlOEv_bGh4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
