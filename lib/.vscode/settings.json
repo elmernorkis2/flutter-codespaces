@@ -1,0 +1,7 @@
+{
+  "editor.formatOnSave": true,
+  "[dart]": {
+    "editor.defaultFormatter": "dart-code.dart-code"
+  },
+  "dart.removeUnusedImportsOnSave": true
+}

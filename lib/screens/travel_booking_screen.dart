@@ -16,7 +16,7 @@ class TravelBookingScreen extends StatelessWidget {
             ],
           ),
         ),
-        body: const TabBarView(
+        body: TabBarView(
           children: [
             HotelsScreen(), // ✅ This shows your Airbnb-style layout
             Center(child: Text('Flights tab coming soon')), // Placeholder

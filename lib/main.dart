@@ -1,25 +1,37 @@
 // Dart core libraries
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
+import 'package:flutter/foundation.dart'; // for kIsWeb
 
 // Flutter framework
 import 'package:flutter/material.dart';
 
 // Firebase packages
 import 'package:firebase_core/firebase_core.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'firebase_options.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 // Third-party packages
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:local_auth/local_auth.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:intl/intl.dart';
+
+// Conditionally import secure storage (only for mobile)
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 // App screens
 import 'top_up_screen.dart';
 import 'live_streamers_screen.dart';
+import 'screens/hotels_screen.dart';
+import 'screens/travel_booking_screen.dart';
+import 'package:flutter_app/models/transaction.dart' as model;
+import 'screens/marketplace_home.dart';
+import 'screens/hotel_details_screen.dart';
+import 'package:flutter_app/services/location_service.dart';
+
+// Marketplace screens
+import 'product_detail_screen.dart';
 
 class SignUpScreen extends StatelessWidget {
   final TextEditingController phoneController = TextEditingController();
@@ -198,11 +210,11 @@ class _MPINSetupScreenState extends State<MPINSetupScreen> {
   final TextEditingController mpinController = TextEditingController();
 
   Future<void> _saveUserData(String mpin) async {
-    if (Platform.isAndroid || Platform.isIOS) {
-      const storage = FlutterSecureStorage(); // Secure storage for MPIN
-      await storage.write(key: 'mpin', value: mpin); // 🔐 Save MPIN securely
+    if (!kIsWeb) {
+      const storage = FlutterSecureStorage();
+      await storage.write(key: 'mpin', value: mpin);
     } else {
-      debugPrint('Secure storage not supported on this platform');
+      debugPrint('Secure storage not supported on web');
     }
 
     final prefs = await SharedPreferences.getInstance(); // Regular storage
@@ -449,6 +461,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   late List<Map<String, String>> transactions;
 
   bool showTransactions = false;
+  int _selectedIndex = 0;
 
   @override
   void initState() {
@@ -457,31 +470,30 @@ class _DashboardScreenState extends State<DashboardScreen> {
     transactions = widget.initialTransactions;
     _loadStoredTransactions(); // 🔄 Load latest transactions
   }
-  int _selectedIndex = 0;
-
 
   void _handleTransaction(double newBalance, Map<String, String> transaction) {
     setState(() {
       balance = newBalance;
       transactions.insert(0, transaction);
     });
-    _updateStorage(); // ✅ Call it here to persist changes
+    _updateStorage(); // ✅ Persist changes
   }
+
   List<Widget> get _screens => [
-  SendMoneyScreen(
-    currentBalance: balance,
-    onTransactionComplete: _handleTransaction,
-  ),
-  PayBillsScreen(
-    currentBalance: balance,
-    onTransactionComplete: _handleTransaction,
-  ),
-  TopUpScreen(
-    currentBalance: balance,
-    onTransactionComplete: _handleTransaction,
-  ),
-  LiveStreamersScreen(),
-];
+        SendMoneyScreen(
+          currentBalance: balance,
+          onTransactionComplete: _handleTransaction,
+        ),
+        PayBillsScreen(
+          currentBalance: balance,
+          onTransactionComplete: _handleTransaction,
+        ),
+        TopUpScreen(
+          currentBalance: balance,
+          onTransactionComplete: _handleTransaction,
+        ),
+        LiveStreamersScreen(),
+      ];
 
   Future<void> _updateStorage() async {
     final prefs = await SharedPreferences.getInstance();
@@ -491,13 +503,20 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   Future<void> _loadStoredTransactions() async {
     final prefs = await SharedPreferences.getInstance();
+
     final txJson = prefs.getString('transactions');
-    if (txJson != null) {
-      final decoded = jsonDecode(txJson) as List;
-      setState(() {
+    final storedBalance = prefs.getDouble('walletBalance');
+
+    setState(() {
+      if (storedBalance != null) {
+        balance = storedBalance;
+      }
+
+      if (txJson != null) {
+        final decoded = jsonDecode(txJson) as List;
         transactions = decoded.map((e) => Map<String, String>.from(e)).toList();
-      });
-    }
+      }
+    });
   }
 
   @override
@@ -551,16 +570,24 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           );
                         }),
                         _buildNavButton('Top-Up', Icons.account_balance_wallet,
-                            () {
-                          Navigator.push(
+                            () async {
+                          final result = await Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (context) => TopUpScreen(
+                              builder: (context) => AddBalanceScreen(
                                 currentBalance: balance,
                                 onTransactionComplete: _handleTransaction,
                               ),
                             ),
                           );
+
+                          if (result != null && result is Map<String, String>) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                  content: Text(
+                                      'Top-Up successful: ${result['amount']}')),
+                            );
+                          }
                         }),
                         _buildNavButton('Live', Icons.live_tv, () {
                           Navigator.push(
@@ -640,6 +667,65 @@ class _DashboardScreenState extends State<DashboardScreen> {
                               },
                             ),
                     const SizedBox(height: 30),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: GestureDetector(
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                                builder: (_) => MarketplaceHome()),
+                          );
+                        },
+                        child: Container(
+                          margin: const EdgeInsets.only(top: 8, bottom: 8),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 16, vertical: 12),
+                          decoration: BoxDecoration(
+                            color: const Color.fromARGB(
+                                255, 217, 238, 252), // Soft blue background
+                            borderRadius: BorderRadius.circular(12),
+                            boxShadow: [
+                              BoxShadow(
+                                color: const Color.fromARGB(255, 214, 240, 247)
+                                    .withAlpha(120),
+                                blurRadius: 6,
+                                offset: const Offset(0, 3),
+                              ),
+                            ],
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min, // Fit content width
+                            children: [
+                              const Icon(Icons.storefront,
+                                  size: 24,
+                                  color: Color.fromRGBO(33, 147, 241, 1)),
+                              const SizedBox(width: 8),
+                              const Text(
+                                'Go to Marketplace',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                  color: Color.fromARGB(255, 33, 72, 243),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color:
+                                      const Color.fromARGB(255, 255, 82, 203),
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: const Text('🆕',
+                                    style: TextStyle(color: Colors.white)),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
                     const Text(
                       'Travel & Booking',
                       style:
@@ -1044,10 +1130,10 @@ class AddBalanceScreen extends StatefulWidget {
   final Function(double, Map<String, String>) onTransactionComplete;
 
   const AddBalanceScreen({
-    super.key,
     required this.currentBalance,
     required this.onTransactionComplete,
-  });
+    Key? key,
+  }) : super(key: key);
 
   @override
   State<AddBalanceScreen> createState() => _AddBalanceScreenState();
@@ -1055,79 +1141,61 @@ class AddBalanceScreen extends StatefulWidget {
 
 class _AddBalanceScreenState extends State<AddBalanceScreen> {
   final TextEditingController _amountController = TextEditingController();
-  String selectedProvider = 'Bank Transfer';
-
-  @override
-  void dispose() {
-    _amountController.dispose(); // Clean up the controller
-    super.dispose();
-  }
+  String selectedProvider = 'GCash';
 
   final List<String> providers = [
     'Bank Transfer',
-    'Asdra',
-    'Bank of the Philippine Islands (BPI)',
-    'BDO Unibank',
-    'Cebuana Lhuillier Pera Padala',
-    'China Bank',
-    'CIMB Bank Philippines',
-    'Coins.ph',
-    'DeeMoney',
-    'Development Bank of the Philippines',
-    'EastWest Bank',
-    'GCash Remit',
-    'LBC Instant Peso Padala',
-    'Land Bank of the Philippines',
-    'Metrobank',
-    'ML Kwarta Padala',
-    'MoneyGram',
-    'Palawan Express Pera Padala',
+    'GCash',
     'PayMaya',
-    'PayPal',
-    'Philippine National Bank (PNB)',
-    'Philippine Veterans Bank',
-    'RCBC',
-    'Remitly',
-    'Ria Money Transfer',
-    'SMARTSWIFT',
-    'Smart Padala',
-    'Security Bank',
-    'TrueMoney',
-    'UnionBank',
+    'Coins.ph',
     'Western Union',
+    'UnionBank',
+    'BDO Unibank',
+    'Metrobank',
+    'Palawan Express',
+    'Smart Padala',
+    'PayPal',
     'Xoom',
   ];
 
+  @override
+  void dispose() {
+    _amountController.dispose();
+    super.dispose();
+  }
+
   void _confirmTopUp() async {
-    print('Confirm Top-Up button pressed'); // Step 1: Confirm button is wired
-
-    final amount = double.tryParse(_amountController.text);
-    print('Entered amount: $amount'); // Step 2: Check if amount is valid
-
+    double? amount = double.tryParse(_amountController.text);
     if (amount == null || amount <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter a valid amount')),
+        SnackBar(content: Text("Please enter a valid amount")),
       );
       return;
     }
 
-    final newBalance = widget.currentBalance + amount;
-    final transaction = {
-      'type': 'Top-Up',
-      'amount': amount.toStringAsFixed(2), // convert double to string
-      'provider': selectedProvider,
-      'timestamp': DateTime.now().toIso8601String(), // already a string
-    };
+    final prefs = await SharedPreferences.getInstance();
+    double currentBalance = prefs.getDouble('walletBalance') ?? 0.0;
+    double newBalance = currentBalance + amount;
+    await prefs.setDouble('walletBalance', newBalance);
 
-    print('New balance: $newBalance'); // Step 3: Confirm balance calculation
-    print('Transaction: $transaction'); // Step 4: Confirm transaction object
+    final transaction = {
+      'timestamp': DateTime.now().toIso8601String(),
+      'amount': '₱${amount.toStringAsFixed(2)}',
+      'type': 'Top-Up via $selectedProvider',
+    };
+    List<String> history = prefs.getStringList('transactionHistory') ?? [];
+    history.insert(0, jsonEncode(transaction));
+    await prefs.setStringList('transactionHistory', history);
 
     widget.onTransactionComplete(newBalance, transaction);
+
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('₱$amount added via $selectedProvider')),
+      SnackBar(
+          content:
+              Text("Top-up successful! ₱${amount.toStringAsFixed(2)} added")),
     );
 
-    Navigator.pop(context);
+    Navigator.pop(context, transaction);
   }
 
   @override
@@ -1137,20 +1205,9 @@ class _AddBalanceScreenState extends State<AddBalanceScreen> {
       body: Padding(
         padding: const EdgeInsets.all(20.0),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('Select Provider',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 10),
             DropdownButton<String>(
               value: selectedProvider,
-              isExpanded: true,
-              items: providers.map((provider) {
-                return DropdownMenuItem(
-                  value: provider,
-                  child: Text(provider),
-                );
-              }).toList(),
               onChanged: (value) {
                 if (value != null) {
                   setState(() {
@@ -1158,31 +1215,32 @@ class _AddBalanceScreenState extends State<AddBalanceScreen> {
                   });
                 }
               },
+              items: providers
+                  .map((provider) => DropdownMenuItem(
+                        value: provider,
+                        child: Text(provider),
+                      ))
+                  .toList(),
             ),
             const SizedBox(height: 20),
-            const Text('Enter Amount',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 10),
             TextField(
               controller: _amountController,
               keyboardType: TextInputType.number,
               decoration: const InputDecoration(
+                labelText: 'Amount',
                 border: OutlineInputBorder(),
-                hintText: 'e.g. 500.00',
               ),
             ),
-            const SizedBox(height: 30),
-            Center(
-              child: ElevatedButton.icon(
-                onPressed: _confirmTopUp,
-                icon: const Icon(Icons.check_circle),
-                label: const Text('Confirm Top-Up'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.green,
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 30, vertical: 12),
-                  textStyle: const TextStyle(fontSize: 16),
-                ),
+            const SizedBox(height: 20),
+            ElevatedButton.icon(
+              onPressed: _confirmTopUp,
+              icon: const Icon(Icons.check_circle),
+              label: const Text('Confirm Top-Up'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.green,
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 30, vertical: 12),
+                textStyle: const TextStyle(fontSize: 16),
               ),
             ),
           ],
@@ -1382,7 +1440,7 @@ class _PayBillsScreenState extends State<PayBillsScreen> {
     'Tonik',
   ];
 
-  void _payBill() {
+  void _payBill() async {
     final amount = double.tryParse(amountController.text);
 
     if (selectedBiller == null || amount == null || amount <= 0) {
@@ -1407,7 +1465,21 @@ class _PayBillsScreenState extends State<PayBillsScreen> {
       'timestamp': DateTime.now().toIso8601String(),
     };
 
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setDouble('walletBalance', newBalance);
+
+    List<String> history = prefs.getStringList('transactionHistory') ?? [];
+    history.insert(0, jsonEncode(transaction));
+    await prefs.setStringList('transactionHistory', history);
+
     widget.onTransactionComplete(newBalance, transaction);
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+          content:
+              Text('Paid ₱${amount.toStringAsFixed(2)} to $selectedBiller')),
+    );
+
     Navigator.pop(context);
   }
 
@@ -1456,14 +1528,12 @@ class _PayBillsScreenState extends State<PayBillsScreen> {
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
 
   final prefs = await SharedPreferences.getInstance();
-
-  final mobileNumber = prefs.getString('mobile'); // Check if mobile is saved
+  final mobileNumber = prefs.getString('mobile');
   final savedMPIN = prefs.getString('mpin');
   final savedBalance = prefs.getDouble('balance') ?? 1000.00;
   final txJson = prefs.getString('transactions');
@@ -1488,7 +1558,10 @@ void main() async {
   }
 
   runApp(MaterialApp(
+    title: 'PHCash',
+    theme: ThemeData(primarySwatch: Colors.blue),
     home: initialScreen,
+    debugShowCheckedModeBanner: false,
   ));
 }
 
@@ -1501,18 +1574,23 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       title: 'GCash Clone',
       theme: ThemeData(
-        // This is the theme of your application.
-        //
-        // Try running your application with "flutter run". You'll see the
-        // application has a blue toolbar. Then, without quitting the app, try
-        // changing the primarySwatch below to Colors.green and then invoke
-        // "hot reload" (press "r" in the console where you ran "flutter run",
-        // or simply save your changes to "hot reload" in a Flutter IDE).
-        // Notice that the counter didn't reset back to zero; the application
-        // is not restarted.
+        useMaterial3: false,
+        visualDensity: VisualDensity.compact,
+        textTheme: const TextTheme(
+          bodyMedium: TextStyle(fontSize: 13),
+        ),
         primarySwatch: Colors.blue,
       ),
-      home: SignUpScreen(),
+      initialRoute: '/',
+      routes: {
+        '/': (context) => SignUpScreen(),
+        '/phone': (context) => const PhoneAuthScreen(),
+        '/mpin': (context) => MPINLoginScreen(
+              savedBalance: 0.0,
+              savedTransactions: [],
+              savedMPIN: '', // or provide actual transaction data
+            ),
+      },
     );
   }
 }
@@ -1524,7 +1602,7 @@ class HotelBookingScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Book a Hotel')),
-      body: const Center(child: Text('Hotel booking options coming soon')),
+      body: HotelsScreen(), // ✅ This shows your Airbnb-style layout
     );
   }
 }
@@ -2224,6 +2302,121 @@ class _GoLiveScreenState extends State<GoLiveScreen> {
           ],
         ),
       ),
+    );
+  }
+}
+
+class PhoneAuthScreen extends StatefulWidget {
+  const PhoneAuthScreen({super.key});
+
+  @override
+  State<PhoneAuthScreen> createState() => _PhoneAuthScreenState();
+}
+
+class _PhoneAuthScreenState extends State<PhoneAuthScreen> {
+  final TextEditingController _phoneController = TextEditingController();
+  final TextEditingController _otpController = TextEditingController();
+
+  String? _verificationId;
+  bool _otpSent = false;
+  bool _isLoading = false;
+
+  Future<void> _sendOTP() async {
+    setState(() => _isLoading = true);
+    await FirebaseAuth.instance.verifyPhoneNumber(
+      phoneNumber: _phoneController.text.trim(),
+      verificationCompleted: (PhoneAuthCredential credential) async {
+        await FirebaseAuth.instance.signInWithCredential(credential);
+        _onAuthSuccess();
+      },
+      verificationFailed: (FirebaseAuthException e) {
+        setState(() => _isLoading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Verification failed: ${e.message}')),
+        );
+      },
+      codeSent: (String verificationId, int? resendToken) {
+        setState(() {
+          _verificationId = verificationId;
+          _otpSent = true;
+          _isLoading = false;
+        });
+      },
+      codeAutoRetrievalTimeout: (String verificationId) {
+        _verificationId = verificationId;
+      },
+    );
+  }
+
+  Future<void> _verifyOTP() async {
+    if (_verificationId == null) return;
+    setState(() => _isLoading = true);
+    final credential = PhoneAuthProvider.credential(
+      verificationId: _verificationId!,
+      smsCode: _otpController.text.trim(),
+    );
+    try {
+      await FirebaseAuth.instance.signInWithCredential(credential);
+      _onAuthSuccess();
+    } catch (e) {
+      setState(() => _isLoading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('OTP verification failed')),
+      );
+    }
+  }
+
+  void _onAuthSuccess() {
+    setState(() => _isLoading = false);
+    Navigator.pushReplacementNamed(context, '/mpin'); // Or your next screen
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Phone Verification')),
+      body: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: _otpSent ? _buildOTPForm() : _buildPhoneForm(),
+      ),
+    );
+  }
+
+  Widget _buildPhoneForm() {
+    return Column(
+      children: [
+        TextField(
+          controller: _phoneController,
+          keyboardType: TextInputType.phone,
+          decoration: const InputDecoration(labelText: 'Enter phone number'),
+        ),
+        const SizedBox(height: 20),
+        ElevatedButton(
+          onPressed: _isLoading ? null : _sendOTP,
+          child: _isLoading
+              ? const CircularProgressIndicator()
+              : const Text('Send OTP'),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildOTPForm() {
+    return Column(
+      children: [
+        TextField(
+          controller: _otpController,
+          keyboardType: TextInputType.number,
+          decoration: const InputDecoration(labelText: 'Enter OTP'),
+        ),
+        const SizedBox(height: 20),
+        ElevatedButton(
+          onPressed: _isLoading ? null : _verifyOTP,
+          child: _isLoading
+              ? const CircularProgressIndicator()
+              : const Text('Verify OTP'),
+        ),
+      ],
     );
   }
 }

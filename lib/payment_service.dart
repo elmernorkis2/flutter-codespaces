@@ -8,7 +8,10 @@ class PaymentService {
     required double currentBalance,
   }) {
     final amount = double.tryParse(amountText);
-    if (selectedBiller == null || amount == null || amount <= 0 || amount > currentBalance) {
+    if (selectedBiller == null ||
+        amount == null ||
+        amount <= 0 ||
+        amount > currentBalance) {
       return null;
     }
 

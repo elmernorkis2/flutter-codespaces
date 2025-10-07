@@ -31,20 +31,56 @@ class LiveStreamersScreen extends StatelessWidget {
                 final user = streamers[index];
                 return Card(
                   margin: const EdgeInsets.all(10),
-                  child: ListTile(
-                    leading: Image.network(user.thumbnailUrl),
-                    title: Text(user.name),
-                    subtitle: Text('${user.viewers} viewers'),
-                    trailing: ElevatedButton(
-                      onPressed: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => LiveRoomScreen(user: user),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                        vertical: 10, horizontal: 12),
+                    child: Row(
+                      children: [
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(6),
+                          child: Image.network(
+                            user.thumbnailUrl,
+                            width: 60,
+                            height: 60,
+                            fit: BoxFit.cover,
                           ),
-                        );
-                      },
-                      child: const Text('Watch'),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Text(
+                                    user.name,
+                                    style: const TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w500),
+                                  ),
+                                  const SizedBox(width: 6),
+                                  const Icon(Icons.arrow_drop_down),
+                                  const SizedBox(width: 10),
+                                  ElevatedButton(
+                                    onPressed: () {
+                                      Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (_) =>
+                                              LiveRoomScreen(user: user),
+                                        ),
+                                      );
+                                    },
+                                    child: const Text('Watch'),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 4),
+                              Text('${user.viewers} viewers'),
+                            ],
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 );
